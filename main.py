@@ -167,6 +167,10 @@ if __name__ == "__main__":
                         help='number of memories per task')
     parser.add_argument('--memory_strength', default=0, type=float,
                         help='memory strength (meaning depends on memory)')
+    parser.add_argument('--memory_strength_ewc', default=0, type=float,
+                        help='memory strength for ewc in ewgem')
+    parser.add_argument('--memory_strength_gem', default=0, type=float,
+                        help='memory strength for gem in ewgem')
     parser.add_argument('--finetune', default='no', type=str,
                         help='whether to initialize nets in indep. nets')
 
