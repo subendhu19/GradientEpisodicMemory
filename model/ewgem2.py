@@ -27,6 +27,24 @@ def compute_offsets(task, nc_per_task, is_cifar):
     return offset1, offset2
 
 
+def flatten_fisher(fisher, grad_dims):
+    """
+        This flattens the fisher information diagonal to be used for
+        the cone projection later.
+        fisher: fisher information diagonal per task in layer form
+        grad_dims: list with number of parameters per layers
+    """
+    ret = torch.Tensor(sum(grad_dims))
+    ret.fill_(0.0)
+    cnt = 0
+    for f in fisher:
+        beg = 0 if cnt == 0 else sum(grad_dims[:cnt])
+        en = sum(grad_dims[:cnt + 1])
+        ret[beg: en].copy_(f.data.view(-1))
+        cnt += 1
+    return ret
+
+
 def store_grad(pp, grads, grad_dims, tid):
     """
         This stores parameter gradients of past tasks.
@@ -65,22 +83,28 @@ def overwrite_grad(pp, newgrad, grad_dims):
         cnt += 1
 
 
-def project2cone2(gradient, memories, margin=0.5, eps=1e-3):
+def project2cone2(gradient, memories, fisher, margin=0.5, eps=1e-3, reg=0.5):
     """
         Solves the GEM dual QP described in the paper given a proposed
         gradient "gradient", and a memory of task gradients "memories".
-        Overwrites "gradient" with the final projected update.
+        Overwrites "gradient" with the final projected update. We also use
+        the fisher information diagonal to weight the dot product constraints.
 
-        input:  gradient, p-vector
+        input:  gradient, p-vector, fisher-diagonal
         input:  memories, (t * p)-vector
         output: x, p-vector
     """
     memories_np = memories.cpu().t().double().numpy()
     gradient_np = gradient.cpu().contiguous().view(-1).double().numpy()
+    fisher_np = fisher.double().numpy()
+
     t = memories_np.shape[0]
     P = np.dot(memories_np, memories_np.transpose())
     P = 0.5 * (P + P.transpose()) + np.eye(t) * eps
-    q = np.dot(memories_np, gradient_np) * -1
+
+    # Multiplying the gradient with the fisher information diagonal to get weighted constraints
+    q = np.dot(memories_np, reg * fisher_np * gradient_np) * -1
+
     G = np.eye(t)
     h = np.zeros(t) + margin
     v = quadprog.solve_qp(P, q, G, h)[0]
@@ -240,13 +264,6 @@ class Net(nn.Module):
 
         offset1, offset2 = compute_offsets(t, self.nc_per_task, self.is_cifar)
         loss = self.ce(self.forward(x, t)[:, offset1: offset2], y - offset1)
-
-        # Adding EWC losses
-        for tt in range(t):
-            for i, p in enumerate(self.net.parameters()):
-                l = self.reg * self.fisher[tt][i]
-                l = l * (p - self.optpar[tt][i]).pow(2)
-                loss += l.sum()
         loss.backward()
 
         # check if gradient violates constraints (GEM)
@@ -259,7 +276,9 @@ class Net(nn.Module):
                             self.grads.index_select(1, indx))
             if (dotp < 0).sum() != 0:
                 project2cone2(self.grads[:, t].unsqueeze(1),
-                              self.grads.index_select(1, indx), self.margin)
+                              self.grads.index_select(1, indx),
+                              fisher=flatten_fisher(self.fisher[t-1], self.grad_dims),
+                              margin=self.margin, reg=self.reg)
                 # copy gradients back
                 overwrite_grad(self.parameters, self.grads[:, t],
                                self.grad_dims)
