@@ -19,8 +19,11 @@ from glob import glob
 import numpy as np
 import torch
 
-models = ['single', 'independent', 'multimodal', 'icarl', 'ewc', 'gem']
-datasets = ['mnist_permutations', 'mnist_rotations', 'cifar100']
+# models = ['single', 'independent', 'multimodal', 'icarl', 'ewc', 'gem']
+# datasets = ['mnist_permutations', 'mnist_rotations', 'cifar100']
+
+models = ['ewc', 'gem', 'ewgem1', 'ewgem2']
+datasets = ['mnist_permutations', 'mnist_rotations']
 
 names_datasets = {'mnist_permutations': 'MNIST permutations',
                   'mnist_rotations': 'MNIST rotations',
@@ -31,14 +34,18 @@ names_models = {'single': 'single',
                 'multimodal': 'multimodal',
                 'icarl': 'iCARL',
                 'ewc': 'EWC',
-                'gem': 'GEM'}
+                'gem': 'GEM',
+                'ewgem1': 'EWC + GEM v1',
+                'ewgem2': 'EWC + GEM v2'}
 
 colors = {'single': 'C0',
           'independent': 'C1',
           'multimodal': 'C2',
           'icarl': 'C2',
           'ewc': 'C3',
-          'gem': 'C4'}
+          'gem': 'C4',
+          'ewgem1': 'C5',
+          'ewgem2': 'C6'}
 
 barplot = {}
 

@@ -242,6 +242,10 @@ if __name__ == "__main__":
         os.makedirs(args.save_path)
 
     fname = args.model + '_' + args.data_file + '_'
+    if args.model[:5] == 'ewgem':
+        fname += 'lr_{}_memgem_{}_memewc_{}_'.format(args.lr,
+                                                     args.memory_strength_gem,
+                                                     args.memory_strength_ewc)
     fname += datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     fname += '_' + uid
     fname = os.path.join(args.save_path, fname)

@@ -154,13 +154,10 @@ class Net(nn.Module):
             self.grads = self.grads.cuda()
 
         # setup EWC memories (EWC)
-        self.current_task = 0
         self.fisher = {}
         self.optpar = {}
-        self.memx = None
-        self.memy = None
 
-        # allocate counters
+        # allocate memory counters
         self.observed_tasks = []
         self.old_task = -1
         self.mem_cnt = 0
@@ -187,44 +184,30 @@ class Net(nn.Module):
     def observe(self, x, t, y):
         self.net.train()
 
-        # update memory (GEM)
+        # update memory (GEM + EWC)
         if t != self.old_task:
             self.observed_tasks.append(t)
+            past_task = self.old_task
             self.old_task = t
 
-        # next task (update EWC matrices)?
-        if t != self.current_task:
             self.net.zero_grad()
 
-            if self.is_cifar:
-                offset1, offset2 = self.compute_offsets(self.current_task)
-                self.ce((self.net(self.memx)[:, offset1: offset2]),
-                        self.memy - offset1).backward()
-            else:
-                self.ce(self(self.memx,
-                        self.current_task),
-                        self.memy).backward()
-            self.fisher[self.current_task] = []
-            self.optpar[self.current_task] = []
+            offset1, offset2 = compute_offsets(past_task, self.nc_per_task,
+                                               self.is_cifar)
+            ptloss = self.ce(
+                self.forward(
+                    self.memory_data[past_task],
+                    past_task)[:, offset1: offset2],
+                self.memory_labs[past_task] - offset1)
+            ptloss.backward()
+
+            self.fisher[self.old_task] = []
+            self.optpar[self.old_task] = []
             for p in self.net.parameters():
                 pd = p.data.clone()
                 pg = p.grad.data.clone().pow(2)
-                self.optpar[self.current_task].append(pd)
-                self.fisher[self.current_task].append(pg)
-            self.current_task = t
-            self.memx = None
-            self.memy = None
-
-        if self.memx is None:
-            self.memx = x.data.clone()
-            self.memy = y.data.clone()
-        else:
-            if self.memx.size(0) < self.n_memories:
-                self.memx = torch.cat((self.memx, x.data.clone()))
-                self.memy = torch.cat((self.memy, y.data.clone()))
-                if self.memx.size(0) > self.n_memories:
-                    self.memx = self.memx[:self.n_memories]
-                    self.memy = self.memy[:self.n_memories]
+                self.optpar[self.old_task].append(pd)
+                self.fisher[self.old_task].append(pg)
 
         # Update ring buffer storing examples from current task
         bsz = y.data.size(0)
