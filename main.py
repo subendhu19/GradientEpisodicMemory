@@ -171,6 +171,8 @@ if __name__ == "__main__":
                         help='memory strength for ewc in ewgem')
     parser.add_argument('--memory_strength_gem', default=0, type=float,
                         help='memory strength for gem in ewgem')
+    parser.add_argument('--estimation_type', default=1, type=int,
+                        help='distribution estimation type for ose')
     parser.add_argument('--finetune', default='no', type=str,
                         help='whether to initialize nets in indep. nets')
 
